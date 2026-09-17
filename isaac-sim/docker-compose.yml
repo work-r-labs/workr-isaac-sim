@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+volumes:
+  shared:
+  isaac-sim-cache-ov:
+  isaac-sim-cache-pip:
+  isaac-sim-cache-glcache:
+  isaac-sim-cache-computecache:
+  isaac-sim-cache-asset-browser:
+  isaac-sim-logs:
+  isaac-sim-data:
+  isaac-sim-pkg:
+  isaac-sim-documents:
+  scenes:
+
+services:
+  isaac-sim:
+    container_name: isaac-sim
+    image: nvcr.io/nvidia/isaac-sim:6.0.1
+    restart: unless-stopped
+    runtime: nvidia
+    network_mode: "host"
+    environment:
+      - ACCEPT_EULA=Y
+    volumes:
+      - "scenes:/scenes"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Pull-only mirror of a workr-studio project's assets. The sync CLI
+  # does the whole job -- walk, diff, fetch, verify, prune -- so this
+  # service is only the credentials, the cycle and the resource ceiling.
+  # World-writable scenes volume: the isaac-sim container's user isn't
+  # known ahead of time, and both it and this container write to it.
+  asset-sync:
+    container_name: asset-sync
+    image: node:22-alpine
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache jq >/dev/null
+        /asset-sync/run.sh
+    environment:
+      - WORKR_TOKEN=${WORKR_TOKEN}
+      - PROJECT_ID=${PROJECT_ID}
+      - SYNC_VERSION=${SYNC_VERSION:-}
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-60}
+      # npx writes its cache under HOME, which the image's default user
+      # does not own.
+      - HOME=/tmp
+    volumes:
+      - "scenes:/scenes"
+      - "./asset-sync/run.sh:/asset-sync/run.sh:ro"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 128M
+
+  nginx:
+    network_mode: "host"
+    restart: unless-stopped
+
+  web-viewer:
+    container_name: web-viewer
+    build:
+      context: ./web-viewer-sample
+      network: host
+    network_mode: "host"
+    restart: unless-stopped
+    environment:
+      - ENV=brev
