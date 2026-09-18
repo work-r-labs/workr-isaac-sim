@@ -4,6 +4,7 @@ Modelled on Isaac Sim's own isaacsim.gui.content_browser, which registers the
 "Isaac Sim" collection the same way.
 """
 
+import inspect
 import weakref
 from datetime import datetime
 from pathlib import Path
@@ -39,7 +40,7 @@ class WorkrCollection(CollectionItem):
     """
 
     def __init__(self) -> None:
-        super().__init__(
+        kwargs = dict(
             identifier="Workr Studio",
             title="Workr Studio",
             icon=f"{ICON_PATH}/workr.svg",
@@ -48,6 +49,12 @@ class WorkrCollection(CollectionItem):
             # Isaac Sim's collection is 5; this sits just above it.
             order=4,
         )
+        # Isaac Sim 6.0's CollectionItem requires `protocol`; 6.1 dropped it.
+        # "" is what isaacsim.gui.content_browser 6.0 passes for a root that
+        # is neither omniverse:// nor https://.
+        if "protocol" in inspect.signature(CollectionItem.__init__).parameters:
+            kwargs["protocol"] = ""
+        super().__init__(**kwargs)
 
     def create_add_new_item(self) -> None:
         # No "Add New Connection ..." row: the collection's one folder is fixed.
