@@ -39,7 +39,7 @@ This fork has no public Deploy button (it deploys your bucket's credentials, not
 - Example: `https://isaac-xxxxxxxx.gobrev.dev/viewer`
 - The bare link without `/viewer` isn't served: nginx proxies `/` to port 8080, where upstream's VS Code container ran, and this fork has none.
 3. On subsequent relaunches, simply refresh the viewer tab to see the UI.
-4. Assets mirrored from the project are under `/scenes/library` in the Isaac Sim Content browser. That directory is a view over the mirror in `/scenes/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/scenes/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
+4. Assets mirrored from the project are under `/WORKR_STUDIO/library` in the Isaac Sim Content browser (My Computer). That directory is a view over the mirror in `/WORKR_STUDIO/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/WORKR_STUDIO/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
 
 > [!IMPORTANT]
 > This setup is only intended to be used with one viewer instance. Please only keep one viewer tab open at a time for best results.
@@ -71,9 +71,18 @@ REPO_DIR=/home/ubuntu/workr-isaac-sim
 [ -d "$REPO_DIR" ] || git clone https://github.com/your-org/workr-isaac-sim "$REPO_DIR"
 chown -R ubuntu:ubuntu "$REPO_DIR"
 cd "$REPO_DIR/isaac-sim"
+
+# Brev's env variables reach this script but not a later SSH or
+# `brev shell` session; Compose reads .env from any shell.
+( umask 077
+  printf "WORKR_TOKEN='%s'\nPROJECT_ID='%s'\nSYNC_VERSION='%s'\n" \
+    "$WORKR_TOKEN" "$PROJECT_ID" "$SYNC_VERSION" > .env )
+
 docker compose up -d
 ```
 Brev runs this script as a systemd service, not from your home directory, so the paths must be absolute: a relative `cd workr-isaac-sim/isaac-sim` fails. The checks at the top stop the script with a clear message in its log if the environment variables didn't reach it. Without them, Compose would substitute blanks and `asset-sync` would restart in a loop. `REPO_DIR` must match where the code source clones to; otherwise the script clones and runs a second copy.
+
+The script also copies the three values into `isaac-sim/.env`, readable only by `ubuntu`. Brev's environment variables are only available to this script, not to a terminal you open on the instance later. Without `.env`, running `docker compose up -d` by hand would recreate `asset-sync` with a blank token. The values are single-quoted so Compose doesn't expand a `$` inside them. The file is gitignored.
 8. This fork has no VS Code container, so there's no landing-page password to set. The Secure Links feature (step 11) is what gates access.
 9. Click Next.
 10. Under "Do you want a Jupyter Notebook experience" select "No, I don't want Jupyter".
@@ -117,10 +126,14 @@ To use this project locally, you'll need a workstation that meets [Isaac Sim](ht
 
 **Setup script failed.** The instance's setup-script log shows the first command that failed. `cd: ... No such file or directory` means the repo isn't at `REPO_DIR`. `WORKR_TOKEN: not set` means the Brev environment variables didn't reach the script.
 
+**`asset-sync` keeps restarting, and `docker logs asset-sync` repeats `WORKR_TOKEN: service-account bearer token…`.** The container was created without a token. This usually happens when `docker compose up -d` is run from a shell without the credentials and there's no `isaac-sim/.env`. Create it with `cp .env.example .env && chmod 600 .env`, fill in the three values, and run `docker compose up -d` again. Re-running Brev's setup service with `systemctl restart` doesn't work as a shortcut: it fails when run a second time.
+
+**A library file won't open ("Could not get Sdf layer").** Check that the link resolves from inside Isaac Sim: `docker exec isaac-sim ls -laL /WORKR_STUDIO/library`. Entries in `library/` are rebuilt only after a successful sync, so if `asset-sync` is failing, they can be left over from an older setup.
+
 **Viewer loads but stays black.** On first boot Isaac Sim compiles shaders for several minutes (`docker logs -f isaac-sim` shows progress). After that, check that the UDP ports from step 13 are open and that your network doesn't block UDP. Some work networks and VPNs do.
 
 **Containers.** If you run into issues or can't make the web viewer connect, check that all containers are running.
-If using Brev, view your GPU Instance page and find the command to open a terminal on your instance.
+To open a terminal on a Brev instance, install the [Brev CLI](https://docs.nvidia.com/brev/cli/getting-started) (on Windows, inside WSL), run `brev login`, then `brev shell <instance-name>`.
 Once you have a terminal to the instance running the containers, run `docker ps` and note if the following containers are running:
 - isaac-sim
 - isaac-sim-nginx-1
@@ -132,7 +145,7 @@ To restart the containers:
 2. Now run `docker compose up -d`
 3. Confirm containers mentioned above are all running using `docker ps`
 
-Before step 2, check that `echo "${WORKR_TOKEN:+token set}"` prints `token set`. The credentials come from Brev's environment variables, and if your SSH shell doesn't have them, Compose recreates `asset-sync` with blank values.
+Compose takes the `asset-sync` credentials from `isaac-sim/.env`, which the setup script writes. If that file is missing, see the `asset-sync` entry above before running step 2.
 
 
 ## Licensing Terms
