@@ -35,11 +35,11 @@ This fork has no public Deploy button (it deploys your bucket's credentials, not
 ## Running Isaac Sim
 
 1. Wait for the instance to be fully ready on Brev: running, built, and the setup script has completed (the first launch can take a while).
-2. Open the instance's Shareable URL (or Secure Link), and append `/viewer` to it.
-- Example: `ec2.something.amazonaws.com/viewer`
-3. If nothing streams after a minute or two, the `isaac-sim` container's default entrypoint may not run headless-streaming mode on its own — SSH to the Brev instance and run `docker exec isaac-sim /isaac-sim/runheadless.sh` (this fork has no VS Code terminal, unlike upstream's Isaac Lab flow, so this is the one place a manual command might still be needed; confirm on first boot and drop this step from these notes if it isn't).
-4. On subsequent relaunches, simply refresh the viewer tab to see the UI.
-5. Assets mirrored from the project are under `/scenes/library` in the Isaac Sim Content browser. That directory is a view over the mirror in `/scenes/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/scenes/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
+2. Open the instance's port-80 Secure Link in Chrome or Edge and append `/viewer` to it. Brev asks you to sign in with an NVIDIA account; use an email the Secure Link grants access to (see step 11 of "Creating Your Own Launchable").
+- Example: `https://isaac-xxxxxxxx.gobrev.dev/viewer`
+- The bare link without `/viewer` isn't served: nginx proxies `/` to port 8080, where upstream's VS Code container ran, and this fork has none.
+3. On subsequent relaunches, simply refresh the viewer tab to see the UI.
+4. Assets mirrored from the project are under `/scenes/library` in the Isaac Sim Content browser. That directory is a view over the mirror in `/scenes/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/scenes/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
 
 > [!IMPORTANT]
 > This setup is only intended to be used with one viewer instance. Please only keep one viewer tab open at a time for best results.
@@ -55,41 +55,47 @@ These instructions describe how to create a customized Launchable, similar to th
 1. Log in to the [Brev](https://login.brev.nvidia.com/signin) website.
 2. Go to the Launchables category.
 3. Click the **Create Launchable** button.
-4. Choose the "I don't have any code files" option.
-5. Choose **VM Mode - Basic VM with Python installed**, then click Next.
-6. On the next page, add a setup script. Under the *Paste Script* tab, add this code (replace the repo URL with your fork and fill in the service-account token — see `isaac-sim/.env.example`). To find the project id, run `WORKR_TOKEN=<token> npx @workr-labs/sync projects` anywhere with node installed:
+4. Set the Launchable's code source to your fork's GitHub URL. (Choosing "I don't have any code files" also works: the setup script below clones the repo if Brev hasn't.)
+5. Choose **VM Mode - Basic VM with Python installed**, then click Next. Container mode won't work: the stack needs Docker Compose with host networking and the NVIDIA runtime.
+6. Add `WORKR_TOKEN`, `PROJECT_ID` and `SYNC_VERSION` as the Launchable's environment variables (see `isaac-sim/.env.example` for what each one is). To find the project id, run `WORKR_TOKEN=<token> npx @workr-labs/sync projects` anywhere with node installed.
+7. Add a setup script. Under the *Paste Script* tab, add this code (replace the repo URL with your fork):
 ```bash
 #!/bin/bash
-export WORKR_TOKEN=your_service_account_bearer_token
-export PROJECT_ID=your_project_id
-export SYNC_VERSION=the_pinned_sync_version
-git clone https://github.com/your-org/workr-isaac-sim
-cd workr-isaac-sim/isaac-sim
+set -euo pipefail
+
+: "${WORKR_TOKEN:?not set - check Brev env variables}"
+: "${PROJECT_ID:?not set - check Brev env variables}"
+: "${SYNC_VERSION:?not set - check Brev env variables}"
+
+REPO_DIR=/home/ubuntu/workr-isaac-sim
+[ -d "$REPO_DIR" ] || git clone https://github.com/your-org/workr-isaac-sim "$REPO_DIR"
+chown -R ubuntu:ubuntu "$REPO_DIR"
+cd "$REPO_DIR/isaac-sim"
 docker compose up -d
 ```
-7. This fork has no VS Code container, so there's no landing-page password to set — the Secure Links feature (step 10) is what gates access.
-
-8. Click Next.
-9. Under "Do you want a Jupyter Notebook experience" select "No, I don't want Jupyter".
-10. Select the Secure Link tab, and add a secure link named "isaac" at port 80. 
-11. Select the TCP/UDP ports tab.
-12. Add rules to open the following ports for streaming:
+Brev runs this script as a systemd service, not from your home directory, so the paths must be absolute: a relative `cd workr-isaac-sim/isaac-sim` fails. The checks at the top stop the script with a clear message in its log if the environment variables didn't reach it. Without them, Compose would substitute blanks and `asset-sync` would restart in a loop. `REPO_DIR` must match where the code source clones to; otherwise the script clones and runs a second copy.
+8. This fork has no VS Code container, so there's no landing-page password to set. The Secure Links feature (step 11) is what gates access.
+9. Click Next.
+10. Under "Do you want a Jupyter Notebook experience" select "No, I don't want Jupyter".
+11. Select the Secure Link tab, and add a secure link named "isaac" at port 80. Grant access to the exact NVIDIA-account email of everyone who will open the viewer. Any other address is refused, even another one belonging to the same person.
+12. Select the TCP/UDP ports tab.
+13. Add rules to open the following ports for streaming (the video goes straight to the instance's IP over these, not through the Secure Link):
 ```
 1024
 47998
 49100
 ```
-13. Click Next.
-14. Choose your desired compute.
+14. Click Next.
+15. Choose your desired compute.
 
 > [!NOTE]
-> GPUs with RT cores are required for Kit App Streaming. 
+> GPUs with RT cores are required for Kit App Streaming, e.g. L4, L40S, A10G or RTX cards. A100 and H100 have no RT cores and won't stream.
 > The compute specs and driver versions provided also need to be compatible with [Isaac Sim](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/requirements.html). The available drivers are not exposed on this Brev page currently.
 
 > [!IMPORTANT]
 > The project is not currently compatible with Crusoe instances. AWS has been tested and is used for the example launchable.
-15. Choose disk storage, then click Next.
-16. Enter a name, then select **Create Launchable**
+16. Choose disk storage, then click Next.
+17. Enter a name, then select **Create Launchable**
 
 Congratulations! You now have a custom launchable.
 
@@ -106,7 +112,14 @@ To use this project locally, you'll need a workstation that meets [Isaac Sim](ht
 5. Access the viewer at `localhost/viewer` in a browser.
 
 ## Troubleshooting
-If you run into issues or can't make the web viewer connect, the first thing to check is that all containers are running.
+
+**NVIDIA-branded "403 Forbidden" page.** This is Brev's Secure Link access check, not the containers. The request never reached the instance. The browser is signed in with an NVIDIA account the link doesn't allow. If you have more than one NVIDIA account, Chrome may sign in with the wrong one automatically. Open the link in an Incognito window and sign in with the email the link grants access to, or add your email to the link's access list.
+
+**Setup script failed.** The instance's setup-script log shows the first command that failed. `cd: ... No such file or directory` means the repo isn't at `REPO_DIR`. `WORKR_TOKEN: not set` means the Brev environment variables didn't reach the script.
+
+**Viewer loads but stays black.** On first boot Isaac Sim compiles shaders for several minutes (`docker logs -f isaac-sim` shows progress). After that, check that the UDP ports from step 13 are open and that your network doesn't block UDP. Some work networks and VPNs do.
+
+**Containers.** If you run into issues or can't make the web viewer connect, check that all containers are running.
 If using Brev, view your GPU Instance page and find the command to open a terminal on your instance.
 Once you have a terminal to the instance running the containers, run `docker ps` and note if the following containers are running:
 - isaac-sim
@@ -115,9 +128,11 @@ Once you have a terminal to the instance running the containers, run `docker ps`
 - asset-sync
 
 To restart the containers:
-1. From the terminal connected to your Brev instance, run `docker compose down`
+1. From the terminal connected to your Brev instance, `cd /home/ubuntu/workr-isaac-sim/isaac-sim` and run `docker compose down`
 2. Now run `docker compose up -d`
 3. Confirm containers mentioned above are all running using `docker ps`
+
+Before step 2, check that `echo "${WORKR_TOKEN:+token set}"` prints `token set`. The credentials come from Brev's environment variables, and if your SSH shell doesn't have them, Compose recreates `asset-sync` with blank values.
 
 
 ## Licensing Terms
