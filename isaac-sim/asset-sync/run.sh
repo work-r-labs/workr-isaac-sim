@@ -58,14 +58,16 @@ project_library() {
     ext="$(printf '%s' "${src##*.}" | tr '[:upper:]' '[:lower:]')"
     case " $SCENE_EXTS " in *" $ext "*) ;; *) continue ;; esac
     name="$(basename "$src")"
+    rel="${src#"$ASSETS_DIR"/}"
     if [ -e "$staging/$name" ]; then
       # Two assets in a project can carry the same display name; the
       # asset id is the only part of the path guaranteed unique, so it
       # disambiguates whichever one lands second.
-      rel="${src#"$ASSETS_DIR"/}"
       name="${name%.*} [${rel%%/*}].$ext"
     fi
-    ln -s "$src" "$staging/$name"
+    # Relative, so a link still resolves in a container that mounts the
+    # volume somewhere other than SCENES_DIR.
+    ln -s "../.assets/$rel" "$staging/$name"
   done
   chmod 0777 "$staging"
   rm -rf "$LIBRARY_DIR"

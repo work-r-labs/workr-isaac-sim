@@ -36,7 +36,9 @@ services:
     environment:
       - ACCEPT_EULA=Y
     volumes:
-      - "scenes:/scenes"
+      # The mount path is the name the Content browser shows under
+      # My Computer. asset-sync mounts the volume at the same path.
+      - "scenes:/WORKR_STUDIO"
     deploy:
       resources:
         reservations:
@@ -68,8 +70,9 @@ services:
       # npx writes its cache under HOME, which the image's default user
       # does not own.
       - HOME=/tmp
+      - SCENES_DIR=/WORKR_STUDIO
     volumes:
-      - "scenes:/scenes"
+      - "scenes:/WORKR_STUDIO"
       - "./asset-sync/run.sh:/asset-sync/run.sh:ro"
     deploy:
       resources:

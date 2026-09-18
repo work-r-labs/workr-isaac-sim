@@ -39,7 +39,7 @@ This fork has no public Deploy button (it deploys your bucket's credentials, not
 - Example: `https://isaac-xxxxxxxx.gobrev.dev/viewer`
 - The bare link without `/viewer` isn't served: nginx proxies `/` to port 8080, where upstream's VS Code container ran, and this fork has none.
 3. On subsequent relaunches, simply refresh the viewer tab to see the UI.
-4. Assets mirrored from the project are under `/scenes/library` in the Isaac Sim Content browser. That directory is a view over the mirror in `/scenes/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/scenes/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
+4. Assets mirrored from the project are under `/WORKR_STUDIO/library` in the Isaac Sim Content browser (My Computer). That directory is a view over the mirror in `/WORKR_STUDIO/.assets`, rebuilt after each sync and holding only openable scene files — renditions like thumbnails stay in the mirror and out of the browser. Nothing should be written into `/WORKR_STUDIO/.assets`: the sync CLI removes what it no longer sees upstream, and anything else there survives only by accident. This is pull-only: nothing saved locally is pushed back to workr-studio (see `isaac-sim/docker-compose.yml`'s `asset-sync` service and `isaac-sim/asset-sync/run.sh`).
 
 > [!IMPORTANT]
 > This setup is only intended to be used with one viewer instance. Please only keep one viewer tab open at a time for best results.
