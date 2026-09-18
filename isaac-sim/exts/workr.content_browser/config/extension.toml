@@ -1,0 +1,14 @@
+[package]
+version = "0.1.0"
+title = "Workr Studio Content"
+description = "Adds a Workr Studio collection to the Content browser, next to Isaac Sim and Omniverse, for the assets asset-sync mirrors from workr-studio."
+category = "other"
+keywords = ["browser", "assets", "content", "workr"]
+
+[dependencies]
+"omni.kit.widget.filebrowser" = {}
+"omni.kit.window.content_browser" = {}
+"omni.kit.window.filepicker" = {}
+
+[[python.module]]
+name = "workr.content_browser"

@@ -35,10 +35,15 @@ services:
     network_mode: "host"
     environment:
       - ACCEPT_EULA=Y
+    # Appended to the image's entrypoint (runheadless.sh), which passes
+    # them on to Kit. Adds the Workr Studio collection to the Content browser.
+    command: ["--enable", "workr.content_browser"]
     volumes:
       # The mount path is the name the Content browser shows under
       # My Computer. asset-sync mounts the volume at the same path.
       - "scenes:/WORKR_STUDIO"
+      # extsUser is one of the folders Kit searches for extensions.
+      - "./exts/workr.content_browser:/isaac-sim/extsUser/workr.content_browser:ro"
     deploy:
       resources:
         reservations:
